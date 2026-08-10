@@ -629,6 +629,74 @@ func TestRBAC_DatabaseCluster(t *testing.T) {
 		}
 	})
 
+	t.Run("UpdateDatabaseCluster - unchanged backup schedules referencing inaccessible storage", func(t *testing.T) {
+		t.Parallel()
+		ctx := testUserContext(rbac.User{Subject: "bob"})
+		policy := newPolicy(
+			"p, role:test, database-clusters, update, default/test-cluster",
+			"p, role:test, database-engines, read, default/percona-xtradb-cluster-operator",
+			"g, bob, role:test",
+		)
+		k8sMock := newConfigMapMock(policy)
+		enf, err := rbac.NewEnforcer(ctx, k8sMock, zap.NewNop().Sugar())
+		require.NoError(t, err)
+
+		existingSched := []everestv1alpha1.BackupSchedule{
+			{
+				Name:              "daily-backup",
+				Enabled:           true,
+				BackupStorageName: "inaccessible-storage",
+				Schedule:          "0 0 * * *",
+			},
+		}
+
+		next := &handlers.MockHandler{}
+		next.On("GetDatabaseCluster", mock.Anything, "default", "test-cluster").
+			Return(
+				&everestv1alpha1.DatabaseCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster",
+						Namespace: "default",
+					},
+					Spec: everestv1alpha1.DatabaseClusterSpec{
+						Engine: everestv1alpha1.Engine{
+							Type: everestv1alpha1.DatabaseEnginePXC,
+						},
+						Backup: everestv1alpha1.Backup{
+							Schedules: existingSched,
+						},
+					},
+				}, nil,
+			)
+		next.On("UpdateDatabaseCluster", mock.Anything, mock.Anything).
+			Return(&everestv1alpha1.DatabaseCluster{}, nil)
+
+		h := &rbacHandler{
+			next:       next,
+			enforcer:   enf,
+			log:        zap.NewNop().Sugar(),
+			userGetter: testUserGetter,
+		}
+
+		// Updating cluster with unchanged backup schedule should succeed even without read permission on inaccessible-storage.
+		_, err = h.UpdateDatabaseCluster(ctx, &everestv1alpha1.DatabaseCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+			},
+			Spec: everestv1alpha1.DatabaseClusterSpec{
+				Engine: everestv1alpha1.Engine{
+					Type:     everestv1alpha1.DatabaseEnginePXC,
+					Replicas: 3,
+				},
+				Backup: everestv1alpha1.Backup{
+					Schedules: existingSched,
+				},
+			},
+		})
+		assert.NoError(t, err)
+	})
+
 	t.Run("UpdateDatabaseCluster - PSMDB", func(t *testing.T) {
 		t.Parallel()
 		testCases := []struct {

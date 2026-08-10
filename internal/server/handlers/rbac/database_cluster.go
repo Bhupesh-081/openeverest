@@ -153,15 +153,14 @@ func (h *rbacHandler) UpdateDatabaseCluster(ctx context.Context, db *everestv1al
 		if err := h.enforce(ctx, rbac.ResourceDatabaseClusterBackups, rbac.ActionCreate, rbac.ObjectName(oldDB.GetNamespace(), db.GetName())); err != nil {
 			return nil, err
 		}
-	}
-
-	// User should be able to read a backup storage to use it in a backup schedule.
-	for _, sched := range updatedSched {
-		if err := h.enforce(
-			ctx, rbac.ResourceBackupStorages, rbac.ActionRead,
-			rbac.ObjectName(oldDB.GetNamespace(), sched.BackupStorageName),
-		); err != nil {
-			return nil, err
+		// User should be able to read a backup storage to use it in a backup schedule.
+		for _, sched := range updatedSched {
+			if err := h.enforce(
+				ctx, rbac.ResourceBackupStorages, rbac.ActionRead,
+				rbac.ObjectName(oldDB.GetNamespace(), sched.BackupStorageName),
+			); err != nil {
+				return nil, err
+			}
 		}
 	}
 
