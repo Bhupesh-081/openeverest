@@ -160,6 +160,19 @@ func TestUpgrade_canUpgrade(t *testing.T) {
 			wantUpgradeTo: "0.9.2",
 		},
 		{
+			name:           "do not cross a major version automatically",
+			everestVersion: "1.9.0",
+			versionMeta: &version.MetadataResponse{
+				Versions: []*version.MetadataVersion{
+					{Version: "1.8.0"},
+					{Version: "1.9.0"},
+					{Version: "2.0.0"},
+					{Version: "2.1.0"},
+				},
+			},
+			wantErrIs: ErrCannotUpgradeAcrossMajorVersion,
+		},
+		{
 			name:           "upgrade to the next minor version even if a patch version is available - mixed order",
 			everestVersion: "0.8.0",
 			versionMeta: &version.MetadataResponse{
@@ -271,6 +284,26 @@ func TestUpgrade_ValidateVersionToUpgrade(t *testing.T) {
 		{
 			currentEverestVersion: "0.6.0",
 			targetEverestVersion:  "0.7.1",
+			wantErrIs:             nil,
+		},
+		{
+			currentEverestVersion: "1.9.0",
+			targetEverestVersion:  "2.0.0",
+			wantErrIs:             ErrCannotUpgradeAcrossMajorVersion,
+		},
+		{
+			currentEverestVersion: "1.9.0",
+			targetEverestVersion:  "2.1.0",
+			wantErrIs:             ErrCannotUpgradeAcrossMajorVersion,
+		},
+		{
+			currentEverestVersion: "0.10.0",
+			targetEverestVersion:  "1.0.0",
+			wantErrIs:             ErrCannotUpgradeAcrossMajorVersion,
+		},
+		{
+			currentEverestVersion: "1.9.0",
+			targetEverestVersion:  "1.9.1",
 			wantErrIs:             nil,
 		},
 	}

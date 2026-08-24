@@ -99,6 +99,7 @@ var (
 	ErrNoUpdateAvailable                      = errors.New("no update available")
 	ErrDowngradeNotAllowed                    = errors.New("downgrade not allowed")
 	ErrCannotUpgradeByMoreThanOneMinorVersion = errors.New("cannot upgrade by more than one minor version")
+	ErrCannotUpgradeAcrossMajorVersion        = errors.New("cannot upgrade across a major version")
 )
 
 // NewUpgrade returns a new Upgrade struct.
@@ -286,6 +287,10 @@ func validateVersionToUpgrade(
 	if targetEverestVersion.Equal(currentEverestVersion) {
 		return ErrNoUpdateAvailable
 	}
+	// Cannot upgrade across a major version.
+	if targetEverestVersion.Segments()[0] != currentEverestVersion.Segments()[0] {
+		return ErrCannotUpgradeAcrossMajorVersion
+	}
 	// Cannot upgrade by more than one minor version.
 	currentMinor := currentEverestVersion.Segments()[1]
 	targetMinor := targetEverestVersion.Segments()[1]
@@ -371,6 +376,13 @@ func (u *Upgrade) versionToUpgradeTo(
 
 	if upgradeTo == nil || meta == nil {
 		return nil, nil, ErrNoUpdateAvailable
+	}
+
+	// The automatically resolved target must satisfy the same rules as an
+	// explicitly requested one, otherwise a gap in the version metadata lets
+	// the CLI propose a jump that `--version` would have rejected.
+	if err := validateVersionToUpgrade(currentEverestVersion, upgradeTo); err != nil {
+		return nil, nil, err
 	}
 
 	return upgradeTo, meta, nil
